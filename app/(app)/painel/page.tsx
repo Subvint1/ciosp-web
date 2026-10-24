@@ -84,9 +84,14 @@ export default async function PaginaPainel() {
       <section className="cartao">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2>Últimos 30 dias</h2>
-          <a href="/painel/csv" className="botao botao-secundario botao-pequeno" download>
-            BAIXAR CSV
-          </a>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <a href="/historico" className="botao botao-secundario botao-pequeno">
+              VER MESES ANTERIORES
+            </a>
+            <a href="/painel/csv" className="botao botao-secundario botao-pequeno" download>
+              BAIXAR CSV
+            </a>
+          </div>
         </div>
         <Grafico30Dias dias={r.dias} meta={meta} />
         {temTurno && (

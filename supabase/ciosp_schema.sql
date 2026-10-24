@@ -364,6 +364,15 @@ grant execute on function
   public.placar(public.turno, date)
 to authenticated;
 
+-- A chave service_role (usada so no servidor, para criar contas e
+-- gravar a auditoria) ignora o RLS, mas ainda precisa de GRANT nas
+-- tabelas quando o projeto nao expoe tabelas novas automaticamente.
+grant select, insert, update, delete
+  on public.perfis, public.checagens, public.contagens_importadas, public.auditoria
+  to service_role;
+grant select on public.contagem_diaria to service_role;
+grant usage, select on all sequences in schema public to service_role;
+
 commit;
 
 -- =====================================================================
