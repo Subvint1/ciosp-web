@@ -1,4 +1,4 @@
-import { inicioDoMes, somarDias, type Turno } from "@/lib/tempo";
+import { inicioDoMes, somarDias, TURNOS, type Turno } from "@/lib/tempo";
 import type { LinhaContagem } from "@/lib/painel";
 
 export type Periodo =
@@ -58,15 +58,32 @@ export function intervalo(p: Periodo, primeiroDia: string, hoje: string): { de: 
   return { de: primeiroDia, ate: hoje };
 }
 
-// Mesma regra do painel: histórico importado conta como do próprio turno;
+// Chaves das barras/pontos do período: dias (Mês) ou meses (Ano, Geral).
+function chavesDoPeriodo(p: Periodo, de: string, ate: string) {
+  if (p.tipo === "mes") {
+    const lista: { chave: string; rotulo: string }[] = [];
+    for (let d = de; d <= ate; d = somarDias(d, 1)) lista.push({ chave: d, rotulo: d.slice(8) });
+    return { granularidade: "dia" as const, lista };
+  }
+  const lista = mesesEntre(inicioDoMes(de).slice(0, 7), ate.slice(0, 7)).map((m) => ({ chave: m, rotulo: nomeMes(m) }));
+  return { granularidade: "mes" as const, lista };
+}
+
+// Regra individual: histórico importado conta como do próprio turno;
 // sem turno no perfil, tudo conta como "meu".
-function doMeuTurno(l: LinhaContagem, turnoPerfil: Turno | null) {
-  return l.origem === "importado" || !turnoPerfil || l.turno === turnoPerfil;
+export function classificarPessoa(turnoPerfil: Turno | null) {
+  return (l: LinhaContagem) => l.origem === "importado" || !turnoPerfil || l.turno === turnoPerfil;
+}
+
+// Regra do total do turno: "meu" = feito por quem é da equipe (turno do perfil),
+// "outro" = feito ali por operadores de outros turnos.
+export function classificarEquipe(equipe: Set<string>) {
+  return (l: LinhaContagem) => !!l.usuario_id && equipe.has(l.usuario_id);
 }
 
 export function resumirPeriodo(
   linhas: LinhaContagem[],
-  turnoPerfil: Turno | null,
+  ehMeu: (l: LinhaContagem) => boolean,
   p: Periodo,
   de: string,
   ate: string,
@@ -75,32 +92,24 @@ export function resumirPeriodo(
   for (const l of linhas) {
     if (l.dia < de || l.dia > ate) continue;
     const d = porDia.get(l.dia) ?? { meu: 0, outro: 0 };
-    if (doMeuTurno(l, turnoPerfil)) d.meu += l.total;
+    if (ehMeu(l)) d.meu += l.total;
     else d.outro += l.total;
     porDia.set(l.dia, d);
   }
 
-  const granularidade = p.tipo === "mes" ? "dia" : "mes";
-  const barras: Barra[] = [];
-  if (granularidade === "dia") {
-    for (let d = de; d <= ate; d = somarDias(d, 1)) {
-      const v = porDia.get(d) ?? { meu: 0, outro: 0 };
-      barras.push({ chave: d, rotulo: d.slice(8), meu: v.meu, outro: v.outro, total: v.meu + v.outro });
-    }
-  } else {
-    const porMes = new Map<string, { meu: number; outro: number }>();
-    for (const [dia, v] of porDia) {
-      const m = dia.slice(0, 7);
-      const acc = porMes.get(m) ?? { meu: 0, outro: 0 };
-      acc.meu += v.meu;
-      acc.outro += v.outro;
-      porMes.set(m, acc);
-    }
-    for (const m of mesesEntre(inicioDoMes(de).slice(0, 7), ate.slice(0, 7))) {
-      const v = porMes.get(m) ?? { meu: 0, outro: 0 };
-      barras.push({ chave: m, rotulo: nomeMes(m), meu: v.meu, outro: v.outro, total: v.meu + v.outro });
-    }
+  const { granularidade, lista } = chavesDoPeriodo(p, de, ate);
+  const porChave = new Map<string, { meu: number; outro: number }>();
+  for (const [dia, v] of porDia) {
+    const k = granularidade === "dia" ? dia : dia.slice(0, 7);
+    const acc = porChave.get(k) ?? { meu: 0, outro: 0 };
+    acc.meu += v.meu;
+    acc.outro += v.outro;
+    porChave.set(k, acc);
   }
+  const barras: Barra[] = lista.map(({ chave, rotulo }) => {
+    const v = porChave.get(chave) ?? { meu: 0, outro: 0 };
+    return { chave, rotulo, meu: v.meu, outro: v.outro, total: v.meu + v.outro };
+  });
 
   let meu = 0, outro = 0, diasTrabalhados = 0;
   let melhorDia: ResumoPeriodo["melhorDia"] = null;
@@ -132,11 +141,72 @@ export function resumirPeriodo(
   };
 }
 
+// Total por pessoa no período (para a tabela do total do turno).
+export function totalPorPessoa(linhas: LinhaContagem[], de: string, ate: string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const l of linhas) {
+    if (!l.usuario_id || l.dia < de || l.dia > ate) continue;
+    m.set(l.usuario_id, (m.get(l.usuario_id) ?? 0) + l.total);
+  }
+  return m;
+}
+
+// ---------------------------------------------------------------------
+// Comparação entre turnos (pelo turno da hora da checagem;
+// o histórico importado entra no turno do perfil de quem fez).
+// ---------------------------------------------------------------------
+export type PontoComparacao = { chave: string; rotulo: string; valores: Record<Turno, number> };
+export type LinhaTurno = {
+  turno: Turno;
+  total: number;
+  parcela: number; // 0..1 do total geral do período
+  diasComChecagem: number;
+  mediaPorDia: number;
+};
+export type Comparacao = {
+  granularidade: "dia" | "mes";
+  pontos: PontoComparacao[];
+  turnos: LinhaTurno[];
+  totalGeral: number;
+};
+
+const zeros = (): Record<Turno, number> => ({ madrugada: 0, manha: 0, tarde: 0, noite: 0 });
+
+export function compararTurnos(linhas: LinhaContagem[], p: Periodo, de: string, ate: string): Comparacao {
+  const { granularidade, lista } = chavesDoPeriodo(p, de, ate);
+  const porChave = new Map<string, Record<Turno, number>>();
+  const diasPorTurno: Record<Turno, Set<string>> = {
+    madrugada: new Set(), manha: new Set(), tarde: new Set(), noite: new Set(),
+  };
+  const totais = zeros();
+
+  for (const l of linhas) {
+    if (!l.turno || l.dia < de || l.dia > ate || l.total <= 0) continue;
+    const k = granularidade === "dia" ? l.dia : l.dia.slice(0, 7);
+    const v = porChave.get(k) ?? zeros();
+    v[l.turno] += l.total;
+    porChave.set(k, v);
+    totais[l.turno] += l.total;
+    diasPorTurno[l.turno].add(l.dia);
+  }
+
+  const totalGeral = TURNOS.reduce((s, t) => s + totais[t], 0);
+  return {
+    granularidade,
+    pontos: lista.map(({ chave, rotulo }) => ({ chave, rotulo, valores: porChave.get(chave) ?? zeros() })),
+    turnos: TURNOS.map((t) => ({
+      turno: t,
+      total: totais[t],
+      parcela: totalGeral ? totais[t] / totalGeral : 0,
+      diasComChecagem: diasPorTurno[t].size,
+      mediaPorDia: diasPorTurno[t].size ? Math.round(totais[t] / diasPorTurno[t].size) : 0,
+    })),
+    totalGeral,
+  };
+}
+
 // Lê o período da URL, com padrão seguro: mês atual.
-export function lerPeriodo(
-  params: { p?: string; m?: string; a?: string },
-  hoje: string,
-): Periodo {
+export function lerPeriodo(params: { p?: string; m?: string; a?: string }, hoje: string): Periodo {
   if (params.p === "geral") return { tipo: "geral" };
   if (params.p === "ano" && /^\d{4}$/.test(params.a ?? "")) return { tipo: "ano", ano: params.a! };
   if (params.p === "ano") return { tipo: "ano", ano: hoje.slice(0, 4) };

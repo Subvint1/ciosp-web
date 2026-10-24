@@ -2,6 +2,7 @@ import { inicioDoMes, somarDias, type Turno } from "@/lib/tempo";
 
 // Uma linha da view contagem_diaria.
 export type LinhaContagem = {
+  usuario_id?: string;
   dia: string;
   turno: Turno | null;
   total: number;

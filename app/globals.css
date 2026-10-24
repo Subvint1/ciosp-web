@@ -126,3 +126,21 @@ button:disabled { opacity: 0.5; cursor: wait; }
   .so-largo { display: none; }
   .so-estreito { display: block; }
 }
+
+/* Cores dos turnos (comparação). Também diferenciados por traço e pelo nome
+   no fim de cada linha, para não depender só da cor. */
+:root {
+  --turno-madrugada: #4c5fd5;
+  --turno-manha: #b07800;
+  --turno-tarde: #1f8a5b;
+  --turno-noite: #c43d3d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --turno-madrugada: #8b9bff;
+    --turno-manha: #f2b84b;
+    --turno-tarde: #4cc38a;
+    --turno-noite: #ff7b7b;
+  }
+}
+.abas-secundarias a { font-size: 12px; padding: 5px 10px; }

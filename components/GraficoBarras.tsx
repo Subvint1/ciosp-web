@@ -4,6 +4,8 @@ type Props = {
   barras: Barra[];
   meta?: number; // só faz sentido quando cada barra é um dia
   descricao: string;
+  rotuloMeu?: string;
+  rotuloOutro?: string;
 };
 
 // Barras empilhadas: parte escura = no seu turno, parte clara = em outro turno.
@@ -27,6 +29,8 @@ function Desenho({
   barras,
   meta,
   descricao,
+  rotuloMeu = "no seu turno",
+  rotuloOutro = "em outro turno",
   L,
   A,
   fonte,
@@ -66,7 +70,7 @@ function Desenho({
         const rotulo = (ultimo - i) % cadaRotulo === 0;
         return (
           <g key={b.chave}>
-            <title>{`${b.rotulo}: ${b.total} (${b.meu} no seu turno, ${b.outro} em outro turno)`}</title>
+            <title>{`${b.rotulo}: ${b.total} (${b.meu} ${rotuloMeu}, ${b.outro} ${rotuloOutro})`}</title>
             <rect x={x} y={y(b.meu)} width={barra} height={y(0) - y(b.meu)} fill="var(--meu-turno)" />
             <rect
               x={x}
@@ -77,7 +81,7 @@ function Desenho({
             />
             {rotulo && (
               <text
-                x={Math.min(Math.max(x + barra / 2, esq + fonte), L - dir - fonte * 1.4)}
+                x={Math.min(Math.max(x + barra / 2, esq + b.rotulo.length * fonte * 0.31), L - dir - b.rotulo.length * fonte * 0.31)}
                 y={A - 9}
                 textAnchor="middle"
                 fontSize={fonte}
