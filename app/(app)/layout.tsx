@@ -16,6 +16,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
         <nav className="nav" aria-label="Principal">
           <Link href="/painel">Meu painel</Link>
           <Link href="/turno">Placar do turno</Link>
+          {perfil.papel !== "operador" && <Link href="/equipe">Equipe</Link>}
           <Link href="/perfil">Perfil</Link>
         </nav>
         <div className="quem">
