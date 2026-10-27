@@ -17,6 +17,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
           <Link href="/painel">Meu painel</Link>
           <Link href="/historico">Histórico</Link>
           <Link href="/turno">Placar do turno</Link>
+          {perfil.papel !== "operador" && <Link href="/relatorio">Relatório</Link>}
           {perfil.papel !== "operador" && <Link href="/equipe">Equipe</Link>}
           <Link href="/perfil">Perfil</Link>
         </nav>
